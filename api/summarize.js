@@ -1,27 +1,37 @@
 // api/summarize.js
+/* global process */
+
+import { Buffer } from 'node:buffer';
+
+/* eslint-env node */
+
+export const config = {
+  api: { bodyParser: true }, // parse JSON automatically
+};
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  try {
-    const body = await readJson(req);
-    const transcript = body?.transcript;
-    if (!transcript) return res.status(400).json({ error: 'transcript required' });
+  const { transcript } = req.body || {};
+  if (!transcript) return res.status(400).json({ error: 'transcript required' });
 
+  try {
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'content-type': 'application/json'
+        authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'content-type': 'application/json',
       },
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'You summarize meeting transcripts. Output concise bullet points with action items and decisions.' },
-          { role: 'user', content: `Summarize this transcript:\n\n${transcript}` }
+          { role: 'system', content: 'Summarize meeting transcripts into concise bullets with action items & decisions.' },
+          { role: 'user', content: `Summarize this transcript:\n\n${transcript}` },
         ],
-        temperature: 0.2
-      })
+        temperature: 0.2,
+      }),
     });
+
     const j = await r.json();
     if (!r.ok) throw new Error(j?.error?.message || 'OpenAI error');
 
@@ -30,10 +40,4 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
-}
-
-async function readJson(req){
-  const chunks=[]; for await (const c of req) chunks.push(c);
-  const s = Buffer.concat(chunks).toString('utf8') || '{}';
-  return JSON.parse(s);
 }
